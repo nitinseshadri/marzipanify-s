@@ -1,6 +1,6 @@
 # marzipanify-s
 
-A modified version of marzipanify (by @stroughtonsmith) that allows bringup of the Contacts app from the iOS 14 Simulator as well as some iOS system apps on macOS Big Sur. **This tool is unsupported.**
+A modified version of marzipanify (originally created by @stroughtonsmith) that allows bringup of the Contacts app from the iOS 14 Simulator as well as some iOS system apps on macOS Big Sur. **This tool is unsupported.**
 
 A previous version of this repo supported macOS Catalina. See the commit history for more details.
 
