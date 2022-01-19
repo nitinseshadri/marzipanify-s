@@ -6,6 +6,8 @@ A previous version of this repo supported macOS Catalina. See the commit history
 
 This tool has not been tested on macOS Monterey; as such, these instructions are only valid for macOS Big Sur 11.6.x. You may need to modify code (e.g. changing the versions the tool sets in LC_BUILD_VERSION et al.) to make this work on macOS Monterey.
 
+<img src="Calculator.png" alt="Screenshot of iOS Calculator app running on macOS">
+
 ## Howto
 
 Before you begin, copy Contacts.app from the iOS 14 Simulator runtime to a directory where you have write access. How to do this is left as an exercise to the reader.
