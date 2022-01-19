@@ -5,18 +5,19 @@
 //  Created by Steven Troughton-Smith on 16/06/2018.
 //  Copyright © 2018 Steven Troughton-Smith. All rights reserved.
 //
-//  Swizzled by Nitin Seshadri.
-//  Changes Copyright © 2020 Nitin Seshadri.
+//  Modified by Nitin Seshadri.
+//  Changes Copyright © 2020, 2022 Nitin Seshadri.
 //
 
 @import Foundation;
 @import ObjectiveC.runtime;
 @import MachO;
 @import vmnet;
+#import <dlfcn.h>
 
-#define DEBUG_PRINT_COMMANDLINE 0
+#define DEBUG_PRINT_COMMANDLINE 1
 #define PRINT_LIBSWIFT_LINKER_ERRORS 0
-BOOL INJECT_MARZIPAN_GLUE = YES;
+BOOL INJECT_MARZIPAN_GLUE = NO;
 BOOL DRY_RUN = NO;
 
 void processEmbeddedBundle(NSString *bundlePath);
@@ -27,7 +28,6 @@ NSArray *__whitelistedMacFrameworks = nil;
 NSString *injectedCode = @"#import <Foundation/Foundation.h>\n\
 #import <objc/runtime.h>\n\
 #import <dlfcn.h>\n\
-@import UIKit;\n\
 int dyld_get_active_platform();\n\
 \n\
 int my_dyld_get_active_platform()\n\
@@ -45,56 +45,7 @@ static const interpose_t interposing_functions[] __attribute__ ((used, section(\
 @end\n\
 @implementation NSObject (Marzipan)\n\
 -(CGFloat)_bodyLeading { return 0.0; }\n\
-@end\n\
-\n\
-// Swizzling. iOS 12 and 13 Contacts App. Catalina. NS.\n\
-\n\
-// UIColor selector implementation (iOS 12)\n\
-@interface UIColor (Marzipan)\n\
-@end\n\
-@implementation UIColor (Marzipan)\n\
-+ (UIColor*)cardCellBackgroundColor {\n\
-    // Some color that no longer exists in UIKit. Return white color.\n\
-    return [UIColor colorWithRed:255.0/255.0 green:255.0/255.0 blue:255.0/255.0 alpha:1];\n\
-}\n\
-+ (UIColor*)cardCellSeparatorColor {\n\
-    // Some color that no longer exists in UIKit. Return white color.\n\
-    return [UIColor colorWithRed:255.0/255.0 green:255.0/255.0 blue:255.0/255.0 alpha:1];\n\
-}\n\
-@end\n\
-// CoreRoutine.framework (Private API) selector implementation (iOS 12)\n\
-@protocol RTFrameworkProtocol <NSObject>\n\
-@required\n\
-@end\n\
-@protocol RTRoutineManager <NSObject>\n\
-@required\n\
-@end\n\
-@interface RTRoutineManager : NSObject <RTFrameworkProtocol> {\n\
-}\n\
-- (void)startMonitoringForPredictedApplicationsUsingPredicate:(id)arg1 handler:(id)arg2;\n\
-- (id)initWithRestorationIdentifier:(id)arg1;\n\
-@end\n\
-@implementation RTRoutineManager\n\
-- (void)startMonitoringForPredictedApplicationsUsingPredicate:(id)arg1 handler:(id)arg2 {\n\
-    // Private API: I don't know what this does, so do nothing.\n\
-}\n\
-- (id)initWithRestorationIdentifier:(id)arg1 {\n\
-    // Private API: I don't know what this does, so do nothing.\n\
-    return nil;\n\
-}\n\
-@end\n\
-// UISceneConnectionOptions selector implementation (iOS 13)\n\
-@interface UISceneConnectionOptions (Marzipan)\n\
-@property (nonatomic,readonly) UIApplicationShortcutItem *shortcutItem;\n\
-- (UIApplicationShortcutItem*)shortcutItem;\n\
-@end\n\
-@implementation UISceneConnectionOptions (Marzipan)\n\
-- (UIApplicationShortcutItem*)shortcutItem {\n\
-    // Private API: I don't know what this does, so do nothing.\n\
-    return nil;\n\
-}\n\
-@end\n\
-";
+@end";
 
 //int my_dlopen(char *path, int flags)\n\
 //{\n\
@@ -171,7 +122,7 @@ void processInfoPlist(NSString *infoPlistPath)
 	NSMutableDictionary *infoPlist = [NSMutableDictionary dictionaryWithContentsOfFile:infoPlistPath];
 	infoPlist[@"LSRequiresIPhoneOS"] = @NO;
 	infoPlist[@"CFBundleSupportedPlatforms"] = @[@"MacOSX"];
-	infoPlist[@"MinimumOSVersion"] = @"10.14";
+	infoPlist[@"MinimumOSVersion"] = @"11.5";
 	infoPlist[@"CanInheritApplicationStateFromOtherProcesses"] = @YES;
 	infoPlist[@"UIUserInterfaceStyle"] = @"Automatic";
 
@@ -183,7 +134,9 @@ void processInfoPlist(NSString *infoPlistPath)
 	[infoPlist removeObjectForKey:@"DTXcode"];
 	[infoPlist removeObjectForKey:@"DTXcodeBuild"];
 	[infoPlist removeObjectForKey:@"DTPlatformName"];
-	
+
+	//infoPlist[@"LSEnvironment"] = @{ @"DYLD_ROOT_PATH" : @"/System/iOSSupport/" };
+
 	if (INJECT_MARZIPAN_GLUE)
 	{
 		infoPlist[@"LSEnvironment"] = @{ @"DYLD_INSERT_LIBRARIES" : @"@executable_path/../Frameworks/MarzipanGlue.dylib" };
@@ -200,7 +153,7 @@ void injectMarzipanGlue(NSString *bundlePath)
 	
 	[[NSFileManager defaultManager] createDirectoryAtPath:frameworksPath withIntermediateDirectories:YES attributes:nil error:nil];
 	
-	NSString *compilationCommand = [NSString stringWithFormat:@"echo \"%@\" | xcrun clang -x objective-c - -dynamiclib -target x86_64-apple-ios13.6-macabi -fmodules -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/iOSSupport/System/Library/Frameworks/ -o \"%@/MarzipanGlue.dylib\"", injectedCode, frameworksPath];
+	NSString *compilationCommand = [NSString stringWithFormat:@"echo \"%@\" | clang -x objective-c -mmacosx-version-min=11.5 - -dynamiclib -framework Foundation -o \"%@/MarzipanGlue.dylib\"", injectedCode, frameworksPath];
 	
 #if DEBUG_PRINT_COMMANDLINE
 	printf("%s\n", compilationCommand.UTF8String);
@@ -298,16 +251,18 @@ NSArray *modifyMachHeaderAndReturnNSArrayOfLoadedDylibs(NSString *binaryPath)
 		{
 			struct fat_arch uarch = *(struct fat_arch*)imageHeaderPtr;
 			
-			if (OSSwapBigToHostInt32(uarch.cputype) == CPU_TYPE_X86_64)
+			if (OSSwapBigToHostInt32(uarch.cputype) == CPU_TYPE_ARM64)
 			{
 				//printf("mach_header_64 offset = %u\n", OSSwapBigToHostInt32(uarch.offset));
 				header64offset = OSSwapBigToHostInt32(uarch.offset) -32 + sizeof(struct mach_header_64);
+				printf("WARNING: Only converting arm64 slice. To convert the x86_64 slice use lipo to remove the arm64 slice first.");
 				break;
 			}
-			else if (OSSwapBigToHostInt32(uarch.cputype) == CPU_TYPE_ARM64)
+			else if (OSSwapBigToHostInt32(uarch.cputype) == CPU_TYPE_X86_64)
 			{
 				//printf("mach_header_64 offset = %u\n", OSSwapBigToHostInt32(uarch.offset));
 				header64offset = OSSwapBigToHostInt32(uarch.offset) -32 + sizeof(struct mach_header_64);
+				printf("WARNING: Only converting x86_64 slice. To convert the arm64 slice use lipo to remove the x86_64 slice first.");
 				break;
 			}
 			else
@@ -380,8 +335,8 @@ NSArray *modifyMachHeaderAndReturnNSArrayOfLoadedDylibs(NSString *binaryPath)
 			
 			struct version_min_command ucmd = *(struct version_min_command*)imageHeaderPtr;
 			ucmd.cmd = LC_VERSION_MIN_MACOSX;
-			ucmd.sdk = 10<<16|14<<8|0;
-			ucmd.version = 10<<16|14<<8|0;
+			ucmd.sdk = 11<<16|5<<8|0; // 11.5
+			ucmd.version = 11<<16|5<<8|0; // 11.5
 			
 			if (!DRY_RUN)
 				memcpy(imageHeaderPtr, &ucmd, ucmd.cmdsize);
@@ -390,8 +345,8 @@ NSArray *modifyMachHeaderAndReturnNSArrayOfLoadedDylibs(NSString *binaryPath)
 		{
 			struct build_version_command ucmd = *(struct build_version_command*)imageHeaderPtr;
 			ucmd.platform = PLATFORM_MACCATALYST;
-			ucmd.minos = 12<<16|0<<8|0;
-			ucmd.sdk = 10<<16|14<<8|0;
+			ucmd.minos = 14<<16|7<<8|0; // 14.7
+			ucmd.sdk = 14<<16|7<<8|0; // 14.7
 			
 			if (!DRY_RUN)
 				memcpy(imageHeaderPtr, &ucmd, ucmd.cmdsize);
@@ -417,17 +372,31 @@ NSString *newLinkerPathForLoadedDylib(NSString *loadedDylib)
 	NSString *possibleiOSMacDylibPath = [@"/System/iOSSupport" stringByAppendingPathComponent:loadedDylib];
 	//NSString *possibleSimulatorDylibPath = [@"/System/iOSSimulator" stringByAppendingPathComponent:loadedDylib];
 
-	if ([[NSFileManager defaultManager] fileExistsAtPath:possibleiOSMacDylibPath])
+	// On macOS Big Sur and newer, the dylibs don't exist on the file system
+	// and instead must be dlopened to verify if they exist
+	// If the handle is nil, then the dylib does not exist
+	void *handle = dlopen([possibleiOSMacDylibPath UTF8String], RTLD_NOW);
+
+	if (handle != nil)
 	{
+		dlclose(handle);
 		return possibleiOSMacDylibPath;
 	}
 
+	dlclose(handle);
+	
 	// Redirect deprecated AddressBook.framework to private AddressBookLegacy.framework
 	if ([loadedDylib hasPrefix:@"/System/Library/Frameworks/AddressBook.framework"]) {
 		printf("WARNING: %s was redirected to AddressBookLegacy.framework\n", loadedDylib.UTF8String);
 		return @"/System/iOSSupport/System/Library/PrivateFrameworks/AddressBookLegacy.framework/AddressBookLegacy";
 	}
-	
+
+	// Redirect private AddressBookLegacy.framework
+	if ([loadedDylib hasPrefix:@"/System/Library/PrivateFrameworks/AddressBookLegacy.framework/AddressBookLegacy"]) {
+		printf("WARNING: Legacy %s was redirected to AddressBookLegacy.framework\n", loadedDylib.UTF8String);
+		return @"/System/iOSSupport/System/Library/PrivateFrameworks/AddressBookLegacy.framework/AddressBookLegacy";
+	}
+
 	if (![[NSFileManager defaultManager] fileExistsAtPath:loadedDylib] && ![loadedDylib hasPrefix:@"@rpath"] && ![loadedDylib hasPrefix:@"@executable_path"])
 	{
 		printf("WARNING: no linker redirect available for %s\n", loadedDylib.UTF8String);
@@ -456,7 +425,7 @@ void resignBinary(NSString *appBundlePath, NSString *appBinaryPath)
 	if (!entitlementsDict)
 		entitlementsDict = @{}.mutableCopy;
 	
-	entitlementsDict[@"com.apple.private.iosmac"] = @YES;
+	//entitlementsDict[@"com.apple.private.iosmac"] = @YES; // Not needed anymore.
 	[entitlementsDict writeToFile:entitlementsPath atomically:NO];
 	
 	NSString *resignCommand = [NSString stringWithFormat:@"/usr/bin/codesign --force --sign - --entitlements \"%@\" --timestamp=none \"%@\" &> /dev/null", entitlementsPath, appBundlePath];
