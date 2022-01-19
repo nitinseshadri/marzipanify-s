@@ -135,7 +135,13 @@ void processInfoPlist(NSString *infoPlistPath)
 	}
 	
 	if (FORCE_MAC_IDIOM) {
-		// UIDeviceFamily values: 1 = iPhone, 2 = iPad, 6 = Catalyst Mac Idiom
+		// UIDeviceFamily values:
+		// 1 = iPhone
+		// 2 = iPad
+		// 3 = Apple TV
+		// 4 = Apple Watch
+		// 5 = HomePod
+		// 6 = Catalyst Mac Idiom
 		printf("WARNING: You have forced the converted app to use the Mac idiom. Problems may occur.");
 		infoPlist[@"UIDeviceFamily"] = @[@1, @2, @6];
 	}
