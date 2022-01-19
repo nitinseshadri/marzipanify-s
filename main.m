@@ -17,6 +17,7 @@
 
 #define DEBUG_PRINT_COMMANDLINE 1
 #define PRINT_LIBSWIFT_LINKER_ERRORS 0
+BOOL FORCE_MAC_IDIOM = NO;
 BOOL INJECT_MARZIPAN_GLUE = NO;
 BOOL DRY_RUN = NO;
 
@@ -125,6 +126,19 @@ void processInfoPlist(NSString *infoPlistPath)
 	infoPlist[@"MinimumOSVersion"] = @"11.5";
 	infoPlist[@"CanInheritApplicationStateFromOtherProcesses"] = @YES;
 	infoPlist[@"UIUserInterfaceStyle"] = @"Automatic";
+
+	char *macIdiomEnv = getenv("FORCE_MAC_IDIOM");
+
+	if (macIdiomEnv)
+	{
+		FORCE_MAC_IDIOM = (macIdiomEnv[0] == '1');
+	}
+	
+	if (FORCE_MAC_IDIOM) {
+		// UIDeviceFamily values: 1 = iPhone, 2 = iPad, 6 = Catalyst Mac Idiom
+		printf("WARNING: You have forced the converted app to use the Mac idiom. Problems may occur.");
+		infoPlist[@"UIDeviceFamily"] = @[@1, @2, @6];
+	}
 
 	[infoPlist removeObjectForKey:@"DTSDKName"];
 	[infoPlist removeObjectForKey:@"DTSDKBuild"];
